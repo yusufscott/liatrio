@@ -13,13 +13,26 @@ data "aws_availability_zones" "available" {
 }
 
 #Subnets
-resource "aws_subnet" "liatrio_cluster_subnets" {
+resource "aws_subnet" "liatrio_public_subnets" {
   count = 2
 
   availability_zone = data.aws_availability_zones.available.names[count.index]
   cidr_block        = cidrsubnet(aws_vpc.liatrio_vpc.cidr_block, 8, count.index)
   vpc_id            = aws_vpc.liatrio_vpc.id
   map_public_ip_on_launch = true
+
+  tags = {
+    "Name" = "Liatrio Public Subnet ${count.index}"
+    # "kubernetes.io/cluster/${aws_eks_cluster.liatrio_cluster.name}" = "shared"
+  }
+}
+
+resource "aws_subnet" "liatrio_cluster_subnets" {
+  count = 2
+
+  availability_zone = data.aws_availability_zones.available.names[count.index]
+  cidr_block        = cidrsubnet(aws_vpc.liatrio_vpc.cidr_block, 8, count.index+2)
+  vpc_id            = aws_vpc.liatrio_vpc.id
 
   tags = {
     "Name" = "Liatrio Cluster Subnet ${count.index}"
@@ -30,13 +43,19 @@ resource "aws_subnet" "liatrio_node_subnets" {
   count = 2
 
   availability_zone = data.aws_availability_zones.available.names[count.index]
-  cidr_block        = cidrsubnet(aws_vpc.liatrio_vpc.cidr_block, 8, count.index+2)
+  cidr_block        = cidrsubnet(aws_vpc.liatrio_vpc.cidr_block, 8, count.index+4)
   vpc_id            = aws_vpc.liatrio_vpc.id
 
   tags = {
     "Name" = "Liatrio Node Subnet ${count.index}"
-    "kubernetes.io/cluster/${aws_eks_cluster.liatrio_cluster.name}" = "shared"
+    # "kubernetes.io/cluster/${aws_eks_cluster.liatrio_cluster.name}" = "shared"
   }
+}
+
+#EIPs
+resource "aws_eip" "nat_ips" {
+  count = 2
+  public_ipv4_pool = "amazon"
 }
 
 #Gateways
@@ -48,45 +67,57 @@ resource "aws_internet_gateway" "gw" {
   }
 }
 
-resource "aws_nat_gateway" "liatrio_nat" {
+resource "aws_nat_gateway" "liatrio_nats" {
   count = 2
-  connectivity_type = "private"
-  subnet_id         = aws_subnet.liatrio_node_subnets[count.index].id
+  connectivity_type = "public"
+  subnet_id         = aws_subnet.liatrio_public_subnets[count.index].id
+  allocation_id = aws_eip.nat_ips[count.index].allocation_id
 }
 
 #Route Tables
-data "aws_route_table" "main_rt" {
+resource "aws_route_table" "public_route_table" {
   vpc_id = aws_vpc.liatrio_vpc.id
-  filter {
-    name = "association.main"
-    values = [ "true" ]
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.gw.id
+  }
+
+  tags = {
+    Name = "Liatrio Public RT"
   }
 }
 
-resource "aws_route" "r" {
-  route_table_id            = data.aws_route_table.main_rt.id
-  destination_cidr_block    = "0.0.0.0/0"
-  gateway_id = aws_internet_gateway.gw.id
-}
-
-resource "aws_route_table" "subnet_route_tables" {
+resource "aws_route_table" "private_route_tables" {
   count = 2
   vpc_id = aws_vpc.liatrio_vpc.id
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_nat_gateway.liatrio_nat[count.index].id
+    gateway_id = aws_nat_gateway.liatrio_nats[count.index].id
   }
 
   tags = {
-    Name = "Liatrio RT ${count.index}"
+    Name = "Liatrio Private RT ${count.index}"
   }
 }
 
-resource "aws_route_table_association" "a" {
+resource "aws_route_table_association" "public_rt" {
+  count = 2
+  subnet_id      = aws_subnet.liatrio_public_subnets[count.index].id
+  route_table_id = aws_route_table.public_route_table.id
+}
+
+resource "aws_route_table_association" "cluster_rt" {
+  count = 2
+  subnet_id      = aws_subnet.liatrio_cluster_subnets[count.index].id
+  route_table_id = aws_route_table.private_route_tables[count.index].id
+}
+
+resource "aws_route_table_association" "node_rt" {
   count = 2
   subnet_id      = aws_subnet.liatrio_node_subnets[count.index].id
-  route_table_id = aws_route_table.subnet_route_tables[count.index].id
+  route_table_id = aws_route_table.private_route_tables[count.index].id
 }
 
 #Endpoints
