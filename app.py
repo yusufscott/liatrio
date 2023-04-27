@@ -7,6 +7,10 @@ import time
 app = Flask(__name__)
 
 @app.route("/")
+def health_check():
+    return "<p>Yusuf's Liatrio App</p>"
+
+@app.route("/timestamp")
 def get_timestamp():
     response = {
         "message": "Automate all the things!",
@@ -14,3 +18,7 @@ def get_timestamp():
     }
 
     return json.dumps(response)
+
+@app.route("/_health")
+def health_check():
+    return "<p>running</p>"
