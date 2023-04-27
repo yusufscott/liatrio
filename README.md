@@ -25,7 +25,7 @@ Terraform is then used to deploy the AWS infrastructure. This includes the VPC a
 
 Docker is then used to log into the ECR repo, build the image, and push the image to the repo.
 
-Next, Helm is used in order to deploy the image to the EKS cluster.
+Next, Helm is used in order to deploy the image to the EKS cluster. After a one minute wait, the publicly accessible endpoint will be displayed. 
 
 ## How to Cleanup the environment
 To cleanup the environment, run `./cleanup.sh` from the root directory of this repository. This script will delete the AWS environment, and clear any ENV variables.
