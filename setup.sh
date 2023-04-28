@@ -8,6 +8,6 @@ docker tag liatrio.app:latest ${AWS_ACCOUNT}.dkr.ecr.us-east-1.amazonaws.com/lia
 docker push ${AWS_ACCOUNT}.dkr.ecr.us-east-1.amazonaws.com/liatrio.app:latest
 aws eks update-kubeconfig --name liatrio-cluster --region=us-east-1
 helm install app ./app
-export SERVICE_IP=$(kubectl get svc --namespace default app --template "{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}")
 sleep 60
+export SERVICE_IP=$(kubectl get svc --namespace default app --template "{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}")
 echo http://$SERVICE_IP:80
