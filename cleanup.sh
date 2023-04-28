@@ -1,3 +1,4 @@
+helm uninstall app
 terraform destroy -auto-approve
 docker image rm liatrio.app
 export POD_NAME=""
